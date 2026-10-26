@@ -15,7 +15,7 @@ Both devices need internet, but do not need the same Wi-Fi network. A slide numb
 
 ## Local development
 
-Use Node.js 22.12+ (Node 24 recommended) and pnpm. Dependency install scripts are allowed only for `esbuild` and `workerd` in `pnpm-workspace.yaml`.
+Use Node.js 24+ and pnpm 12.4.1 (pinned in `package.json`). Dependency install scripts are allowed only for `esbuild` and `workerd` in `pnpm-workspace.yaml`.
 
 ```sh
 pnpm install
@@ -69,6 +69,12 @@ pnpm run deploy:dry
 - **Playwright:** production-built renderer, separate computer and phone browser contexts, pairing approval, notes synchronization, keyboard navigation, refresh recovery, fullscreen, and responsive layouts.
 
 `pnpm run check` and `pnpm run format` modify files. `pnpm run lint` is non-writing.
+
+## Continuous integration
+
+[CI](https://github.com/yehezkielgunawan/pocket-presenter/actions/workflows/ci.yml) runs for pull requests targeting `main` and pushes to `main`. It installs dependencies with a frozen lockfile, checks lint/formatting and frontend/Worker types, runs unit/component tests and Worker integration tests, then builds the app and validates Worker packaging without deploying.
+
+Browser tests remain available locally through `pnpm run test:browser`; they are not required by the base CI workflow.
 
 ## Deploy to Cloudflare Workers
 
