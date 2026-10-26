@@ -5,6 +5,9 @@
   "compatibility_date": "2026-10-26",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
+  "routes": [
+    { "pattern": "remote-presenter.yehezgun.com", "custom_domain": true }
+  ],
   "vars": { "LOCAL_LAN_HOST": "" },
   "assets": {
     "directory": "./dist",
@@ -22,6 +25,7 @@
   "env": {
     "staging": {
       "name": "pocket-presenter-staging",
+      "routes": [],
       "durable_objects": {
         "bindings": [
           { "name": "SESSIONS", "class_name": "PresentationSession" }

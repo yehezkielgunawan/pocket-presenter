@@ -78,6 +78,25 @@ Browser tests remain available locally through `pnpm run test:browser`; they are
 
 ## Deploy to Cloudflare Workers
 
+Production URL: **https://remote-presenter.yehezgun.com**.
+
+### Manual GitHub deployment
+
+The [Deploy to Cloudflare](https://github.com/yehezkielgunawan/pocket-presenter/actions/workflows/deploy.yml) workflow runs only when manually dispatched, and its deployment job runs only for the `main` branch. Pushes and pull requests never deploy automatically. The workflow reruns lint, type checks, and unit/Worker tests before building and deploying.
+
+Add these [repository Actions secrets](https://github.com/yehezkielgunawan/pocket-presenter/settings/secrets/actions) before the first deployment:
+
+| Secret | Value |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | A Cloudflare API token authorized to deploy Workers and manage the custom domain in the `yehezgun.com` zone. Start with the **Edit Cloudflare Workers** token template, scoped to the correct account and zone. |
+| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account ID that owns the Worker and domain zone. |
+
+Then open **Actions → Deploy to Cloudflare → Run workflow**, select **main**, and run it. The workflow records the deployment in the GitHub `production` environment.
+
+`wrangler.jsonc` declares `remote-presenter.yehezgun.com` as a Worker Custom Domain. The `yehezgun.com` zone must already be active in the deploying Cloudflare account. Cloudflare provisions the hostname's DNS and TLS on deployment; no origin server is needed. An existing conflicting CNAME for that hostname must be removed before the first deployment. Staging explicitly has no production custom-domain route.
+
+### Local CLI deployment
+
 ```sh
 pnpm exec wrangler login
 pnpm run types
