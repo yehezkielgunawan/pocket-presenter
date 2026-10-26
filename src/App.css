@@ -1,0 +1,129 @@
+@import "tailwindcss" source('./');
+@plugin "daisyui" {
+  themes: corporate --default;
+}
+
+body {
+  margin: 0;
+}
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell {
+  min-height: 100dvh;
+  background: var(--color-base-200);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.6px;
+  text-decoration: none;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  background: var(--color-neutral);
+  color: var(--color-neutral-content);
+  border-radius: 10px;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -2px;
+  padding-bottom: 5px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.17em;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+}
+.workspace {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 40px 40px 24px;
+}
+.stage-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-neutral);
+  isolation: isolate;
+}
+.stage-frame:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.stage-renderer {
+  width: 100%;
+  height: 100%;
+  background: white;
+  color: black;
+  font-family: Arial, sans-serif;
+  line-height: normal;
+}
+.stage-renderer img,
+.stage-renderer svg {
+  max-width: none;
+}
+.stage-renderer p {
+  margin: 0;
+}
+.upload-zone {
+  min-height: 330px;
+  border: 1px dashed var(--color-base-300);
+  border-radius: 12px;
+  background: var(--color-base-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.upload-zone:hover {
+  border-color: var(--color-primary);
+}
+.remote-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: clamp(19px, 4vw, 23px);
+  line-height: 1.75;
+}
+.remote-controls {
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+@media (max-width: 760px) {
+  .workspace {
+    padding: 28px 18px 20px;
+  }
+  .upload-zone {
+    min-height: 260px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .workspace {
+    animation: enter 0.35s ease-out;
+  }
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

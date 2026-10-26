@@ -1,0 +1,25 @@
+# Local
+.DS_Store
+*.local
+*.log*
+.env
+.env.*
+!.env.example
+.codegraph/
+
+# Dist
+node_modules
+dist/
+
+# Profile
+.rspack-profile-*/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.wrangler/
+.dev.vars*
+playwright-report/
+test-results/
+worker-configuration.d.ts

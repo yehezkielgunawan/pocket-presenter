@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pocket-presenter",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+  "vars": { "LOCAL_LAN_HOST": "" },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SESSIONS", "class_name": "PresentationSession" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PresentationSession"] }
+  ],
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "name": "pocket-presenter-staging",
+      "durable_objects": {
+        "bindings": [
+          { "name": "SESSIONS", "class_name": "PresentationSession" }
+        ]
+      }
+    }
+  }
+}
