@@ -1,17 +1,44 @@
 # Pocket Presenter
 
-Open a PowerPoint on your computer and control it from your phone, with private speaker notes and a confirmed slide counter. Built with React, Rsbuild, DaisyUI's **corporate** theme, and Cloudflare Workers + Durable Objects.
+Present a PowerPoint or PDF on your computer and control it from your phone, with private speaker notes and a confirmed slide counter. Built with React, Rsbuild, DaisyUI's **corporate** theme, and Cloudflare Workers + Durable Objects.
 
 ## How it works
 
-1. Open the site on your computer and choose a `.pptx` file.
-2. Review the rendered slides. The file is parsed and rendered locally; it is not uploaded.
-3. Select **Connect your phone**.
-4. Scan the QR code or open `/join` on your phone and enter the displayed code.
-5. Approve the phone on the computer.
-6. Enter fullscreen on the computer. Use Previous/Next on the phone while reading your notes.
+1. Open the site on your computer and choose a `.pptx` or presentation `.pdf` file.
+2. For a PDF presentation, choose a Markdown notes file (`.md` or `.markdown`). Separate each slide's notes with `---` on its own line.
+3. Review the rendered slides and notes preview. The selected files are parsed locally; they are not uploaded.
+4. Select **Connect your phone**.
+5. Scan the QR code or open `/join` on your phone and enter the displayed code.
+6. Approve the phone on the computer.
+7. Enter fullscreen on the computer. Use Previous/Next on the phone while reading your notes.
 
 Both devices need internet, but do not need the same Wi-Fi network. A slide number is confirmed only after the computer's browser reports rendering that slide. This does not verify a physical projector's output.
+
+### Markdown notes for PDF presentations
+
+Write UTF-8 Markdown with sections in slide order:
+
+```markdown
+# Introduction
+- Welcome everyone
+- Explain the **goal**
+
+---
+
+# Background
+Key context for the second slide.
+
+---
+
+---
+
+# Demo
+Notes for the fourth slide. The third section is intentionally blank.
+```
+
+Section 1 follows PDF page 1, section 2 follows page 2, and so on. Notes always follow the active slide, including backward navigation and jumps. You do not need the same number of notes sections as PDF pages: missing or empty sections show “No speaker notes for this slide.” Extra sections are accepted and ignored. A trailing separator adds an empty section.
+
+The PC preview and phone render headings, lists, emphasis, links, and code. A separator inside a fenced code block stays part of the code. Only a line containing exactly `---` (with up to three leading spaces and optional trailing spaces or tabs) splits sections; use `***` for a horizontal rule within a section. The separator convention takes precedence over Markdown front matter and setext heading underlines, so use `#` headings instead.
 
 ## Local development
 
@@ -64,7 +91,7 @@ pnpm run test:browser
 pnpm run deploy:dry
 ```
 
-- **Rstest + jsdom:** React UI, relationship-based notes extraction, protocol validation, and navigation state transitions. jsdom is used because the notes parser requires namespace-aware XML DOM behavior.
+- **Rstest + jsdom:** React UI, relationship-based PPTX notes extraction, Markdown notes parsing and rendering, slide mapping, fingerprints, protocol validation, and navigation state transitions. jsdom is used because the PPTX notes parser requires namespace-aware XML DOM behavior.
 - **Vitest + Cloudflare's Workers plugin:** real Worker/Durable Object APIs, pairing permissions, WebSocket acknowledgments, persisted recovery, and expiry.
 - **Playwright:** production-built renderer, separate computer and phone browser contexts, pairing approval, notes synchronization, keyboard navigation, refresh recovery, fullscreen, and responsive layouts.
 
@@ -116,7 +143,7 @@ Deployment publishes the application; it does not upload presentation files. The
 
 ## Privacy and session behavior
 
-- PPTX bytes, slide media, and rendered slides remain in the computer's browser memory.
+- PPTX bytes, presentation PDFs, Markdown notes files, and rendered slides remain in the computer's browser memory.
 - Session metadata includes a SHA-256 deck fingerprint, slide count, revision, and confirmed/pending indexes.
 - Only current speaker notes are relayed through the Worker to the approved phone. Notes are not written to Durable Object storage or application logs.
 - Session codes identify rooms; they do not grant control. The host approves pairing, and role credentials use HttpOnly, same-site cookies (Secure on HTTPS).
@@ -124,21 +151,23 @@ Deployment publishes the application; it does not upload presentation files. The
 - Commands are bounded and deduplicated. Stale acknowledgments cannot advance confirmed state.
 - A failed or timed-out render disables remote navigation until the host resumes.
 - Sessions expire after 24 hours. Ending or expiring a session deletes its persisted metadata.
-- After refreshing the computer, reselect the exact original file to resume. Files are not saved in browser storage; only the session identifier is kept in sessionStorage.
-- Notes are plain text. External slide media is blocked; embedded media remains subject to renderer support.
+- After refreshing the computer, reselect the exact original presentation file and, for PDFs, its original Markdown notes file to resume. Files are not saved in browser storage; only the session identifier is kept in sessionStorage.
+- PPTX notes are plain text; PDF notes are Markdown with raw HTML disabled and unsafe link protocols filtered. External slide media is blocked; embedded media remains subject to renderer support.
 
 ## Presentation compatibility
 
-The browser renderer is `@aiden0z/pptx-renderer`, isolated behind `src/features/deck/renderer.ts`. This MVP supports static slides, not PowerPoint animation or transition playback. Fonts, SmartArt, charts, equations, and advanced effects can differ from PowerPoint. Embedded PDF-based media fallbacks are disabled in this MVP.
+PPTX files render with `@aiden0z/pptx-renderer`; PDF files render with PDF.js. PDF speaker notes come from a separate Markdown file, with `---` sections mapped to the same-numbered PDF page. Both presentation renderers and the Markdown renderer run in the browser.
+
+PPTX playback supports static slides, not PowerPoint animation or transition playback. Fonts, SmartArt, charts, equations, and advanced effects can differ from PowerPoint. Embedded PDF-based media fallbacks are disabled in this MVP.
 
 Always preview your actual deck before presenting. Automated browser tests use a generated fixture, not a guarantee of fidelity for arbitrary presentations.
 
-Limits: 32 MB input, 1–500 slides, 4,000 archive entries, 2 MB per extracted XML part, 16,000 characters of notes per slide, and bounded renderer decompression. Hidden slides are included in presentation order. Notes are associated through XML relationships, not numeric filenames.
+Limits: each selected file can be up to 32 MB; presentations support 1–500 slides; PPTX files allow 4,000 archive entries and 2 MB per extracted XML part; notes are limited to 16,000 characters per slide or mapped Markdown section. Extra Markdown sections beyond the presentation's page count are ignored. Hidden PPTX slides are included in presentation order. PPTX notes are associated through XML relationships, not numeric filenames.
 
 ## Structure
 
 ```text
-src/features/deck/       Local ZIP/XML notes parser and renderer adapter
+src/features/deck/       Local PPTX/PDF readers, notes extraction, and renderers
 src/features/host/       Computer setup and fullscreen audience stage
 src/features/remote/     Pairing form, notes, and mobile navigation
 src/features/session/    HTTP and reconnecting WebSocket clients

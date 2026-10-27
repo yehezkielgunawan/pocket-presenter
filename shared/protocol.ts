@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const index = z.number().int().min(0).max(499);
 const revision = z.number().int().nonnegative();
+const notesFormat = z.enum(['text', 'markdown']).optional();
 export const deckInput = z.object({
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   slideCount: z.number().int().min(1).max(500),
@@ -24,6 +25,7 @@ export const clientMessage = z.discriminatedUnion('type', [
     index,
     revision,
     text: z.string().max(16000),
+    format: notesFormat,
   }),
 ]);
 export type ClientMessage = z.infer<typeof clientMessage>;
@@ -50,7 +52,13 @@ export type ServerMessage =
   | { type: 'snapshot'; state: Snapshot }
   | { type: 'renderTarget'; index: number; revision: number }
   | { type: 'requestNotes'; index: number; revision: number }
-  | { type: 'notes'; index: number; revision: number; text: string }
+  | {
+      type: 'notes';
+      index: number;
+      revision: number;
+      text: string;
+      format?: 'text' | 'markdown';
+    }
   | { type: 'pairing'; requestId: string; label: string }
   | { type: 'error'; message: string };
 
@@ -85,6 +93,7 @@ export const serverMessage = z.discriminatedUnion('type', [
     index,
     revision,
     text: z.string().max(16000),
+    format: notesFormat,
   }),
   z.object({
     type: z.literal('pairing'),

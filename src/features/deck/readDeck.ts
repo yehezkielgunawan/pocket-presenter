@@ -1,24 +1,14 @@
 import JSZip from 'jszip';
+import type { PptxDeck, PptxDeckSlide } from './deckTypes';
+import { fingerprint } from './fingerprint';
+import { MAX_FILE_BYTES, MAX_NOTES, MAX_SLIDES } from './limits';
+
+export type { Deck, DeckSlide, PdfDeck, PptxDeck } from './deckTypes';
+export { MAX_FILE_BYTES, MAX_NOTES, MAX_SLIDES } from './limits';
 
 const P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-export const MAX_FILE_BYTES = 32 * 1024 * 1024;
-export const MAX_SLIDES = 500;
-export const MAX_NOTES = 16_000;
-
-export interface DeckSlide {
-  path: string;
-  notes: string;
-  hidden: boolean;
-}
-export interface Deck {
-  name: string;
-  fingerprint: string;
-  slides: DeckSlide[];
-  buffer: ArrayBuffer;
-}
-
 function xml(source: string) {
   if (/<!DOCTYPE|<!ENTITY/i.test(source))
     throw new Error('Unsupported XML declarations.');
@@ -118,7 +108,7 @@ function notesText(document: Document) {
 export async function readDeck(
   buffer: ArrayBuffer,
   name = 'Presentation.pptx',
-): Promise<Deck> {
+): Promise<PptxDeck> {
   if (buffer.byteLength > MAX_FILE_BYTES)
     throw new Error('Choose a PPTX smaller than 32 MB.');
   const zip = await JSZip.loadAsync(buffer);
@@ -133,7 +123,7 @@ export async function readDeck(
   );
   if (!ids.length || ids.length > MAX_SLIDES)
     throw new Error('Choose a presentation with 1–500 slides.');
-  const slides: DeckSlide[] = [];
+  const slides: PptxDeckSlide[] = [];
   for (const id of ids) {
     const rel = rels.find(
       (item) => item.getAttribute('Id') === id.getAttributeNS(R, 'id'),
@@ -160,11 +150,11 @@ export async function readDeck(
       hidden: slide?.documentElement.getAttribute('show') === '0',
     });
   }
-  const hash = crypto.subtle
-    ? new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))
-    : (await import('@noble/hashes/sha2.js')).sha256(new Uint8Array(buffer));
-  const fingerprint = Array.from(hash, (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
-  return { name, fingerprint, slides, buffer };
+  return {
+    format: 'pptx',
+    name,
+    fingerprint: await fingerprint(buffer),
+    slides,
+    buffer,
+  };
 }

@@ -1,4 +1,5 @@
 import type { Snapshot } from '../../../shared/protocol';
+import { SpeakerNotes } from '../../components/SpeakerNotes';
 import type { Notes } from '../session/useSession';
 
 export function RemoteView({
@@ -62,11 +63,7 @@ export function RemoteView({
         </div>
         <div className="remote-notes" aria-live="polite">
           {matchingNotes ? (
-            notes.text || (
-              <span className="text-base-content/45">
-                No speaker notes for this slide.
-              </span>
-            )
+            <SpeakerNotes text={notes.text} format={notes.format} />
           ) : (
             <span className="text-base-content/45">
               {state?.pending

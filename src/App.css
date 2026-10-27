@@ -78,6 +78,22 @@ input {
 .stage-renderer p {
   margin: 0;
 }
+.stage-renderer.pdf-stage {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.stage-renderer.pdf-stage canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.presentation-file-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 .upload-zone {
   min-height: 330px;
   border: 1px dashed var(--color-base-300);
@@ -96,10 +112,68 @@ input {
   border-color: var(--color-primary);
 }
 .remote-notes {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: clamp(19px, 4vw, 23px);
   line-height: 1.75;
+}
+.markdown-notes {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.markdown-notes > :first-child {
+  margin-top: 0;
+}
+.markdown-notes > :last-child {
+  margin-bottom: 0;
+}
+.markdown-notes :is(p, ul, ol, blockquote, pre, hr) {
+  margin-block: 0.75em;
+}
+.markdown-notes :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1em 0.4em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.markdown-notes h1 {
+  font-size: 1.5em;
+}
+.markdown-notes h2 {
+  font-size: 1.3em;
+}
+.markdown-notes h3 {
+  font-size: 1.15em;
+}
+.markdown-notes :is(ul, ol) {
+  padding-inline-start: 1.5em;
+}
+.markdown-notes ul {
+  list-style-type: disc;
+}
+.markdown-notes ol {
+  list-style-type: decimal;
+}
+.markdown-notes blockquote {
+  padding-inline: 1em;
+  font-style: italic;
+}
+.markdown-notes pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.75em;
+  border-radius: var(--radius-field);
+  background: var(--color-base-200);
+}
+.markdown-notes code {
+  font-size: 0.9em;
+}
+.markdown-notes a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.markdown-notes img {
+  max-width: 100%;
+  height: auto;
 }
 .remote-controls {
   padding-bottom: max(20px, env(safe-area-inset-bottom));
