@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { makeDeck } from '../fixtures/makeDeck';
 
+function isLanIpv4(hostname: string) {
+  const parts = hostname.split('.').map(Number);
+  return (
+    parts.length === 4 &&
+    parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) &&
+    !hostname.startsWith('127.') &&
+    hostname !== '0.0.0.0'
+  );
+}
+
 test('renders a local deck and synchronizes an approved phone with private notes', async ({
   page,
   browser,
@@ -9,12 +19,16 @@ test('renders a local deck and synchronizes an approved phone with private notes
   const deckBuffer = Buffer.from(await makeDeck());
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.goto('/');
-  await page.getByLabel('Choose a PowerPoint file').setInputFiles({
+  const networkResponse = await page.request.get('/api/network');
+  const network = (await networkResponse.json()) as { origin: string };
+  const appOrigin = new URL(page.url()).origin;
+  await page.getByLabel('Presentation file').setInputFiles({
     name: 'research.pptx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     buffer: deckBuffer,
   });
+  await expect(page.getByLabel('Presentation notes Markdown')).toBeDisabled();
   await expect(
     page.getByRole('button', { name: 'Connect your phone' }),
   ).toBeEnabled();
@@ -51,18 +65,16 @@ test('renders a local deck and synchronizes an approved phone with private notes
   const phone = await phoneContext.newPage();
   const phoneRequests: string[] = [];
   phone.on('request', (request) => phoneRequests.push(request.url()));
-  const networkResponse = await page.request.get('/api/network');
-  const network = (await networkResponse.json()) as { origin: string };
   await expect(
     page.getByRole('link', { name: 'Open pairing link' }),
   ).toHaveAttribute('href', `${network.origin}/join?code=${code}`);
-  await phone.goto(
-    (await page
-      .getByRole('link', { name: 'Open pairing link' })
-      .getAttribute('href')) ?? `/join?code=${code}`,
-  );
-  if (new URL(network.origin).hostname !== 'localhost') {
-    expect(await phone.evaluate(() => window.isSecureContext)).toBe(false);
+  const pairingHost = new URL(network.origin).hostname;
+  const pairingOrigin = isLanIpv4(pairingHost) ? network.origin : appOrigin;
+  await phone.goto(`${pairingOrigin}/join?code=${code}`);
+  if (
+    isLanIpv4(new URL(network.origin).hostname) &&
+    !(await phone.evaluate(() => window.isSecureContext))
+  ) {
     expect(await phone.evaluate(() => typeof crypto.randomUUID)).toBe(
       'undefined',
     );
@@ -91,7 +103,7 @@ test('renders a local deck and synchronizes an approved phone with private notes
   await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
   await page.reload();
   await expect(phone.getByRole('button', { name: 'Next' })).toBeDisabled();
-  await page.getByLabel('Choose a PowerPoint file').setInputFiles({
+  await page.getByLabel('Presentation file').setInputFiles({
     name: 'research.pptx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -111,13 +123,17 @@ test('opens a PPTX from an HTTP LAN origin without secure-context APIs', async (
   const response = await page.request.get('/api/network');
   const { origin } = (await response.json()) as { origin: string };
   test.skip(
-    new URL(origin).hostname === 'localhost',
-    'No LAN address available on this machine.',
+    !isLanIpv4(new URL(origin).hostname),
+    'The dev worker did not provide a local LAN IPv4 origin.',
   );
   await page.goto(origin);
+  test.skip(
+    await page.evaluate(() => window.isSecureContext),
+    'This browser treats the local HTTP address as a secure context.',
+  );
   expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
   expect(await page.evaluate(() => typeof crypto.subtle)).toBe('undefined');
-  await page.getByLabel('Choose a PowerPoint file').setInputFiles({
+  await page.getByLabel('Presentation file').setInputFiles({
     name: 'lan.pptx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',

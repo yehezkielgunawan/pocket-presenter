@@ -1,5 +1,5 @@
 import { expect, test } from '@rstest/core';
-import { clientMessage } from '../../shared/protocol';
+import { clientMessage, serverMessage } from '../../shared/protocol';
 import {
   confirm,
   createState,
@@ -14,6 +14,26 @@ test('does not advance confirmed state until matching PC acknowledgment', () => 
   expect(pending.pending?.targetSlideIndex).toBe(1);
   expect(confirm(pending, 1, 0)).toEqual(pending);
   expect(confirm(pending, 1, pending.revision).confirmedSlideIndex).toBe(1);
+});
+
+test('preserves Markdown format through both message schemas and accepts legacy plain text', () => {
+  const message = {
+    type: 'notes',
+    index: 0,
+    revision: 1,
+    text: '# Intro',
+    format: 'markdown',
+  };
+  expect(clientMessage.parse(message)).toEqual(message);
+  expect(serverMessage.parse(message)).toEqual(message);
+  const plain = { type: 'notes', index: 0, revision: 1, text: '**Literal**' };
+  expect(serverMessage.parse(plain)).toMatchObject(plain);
+  expect(clientMessage.safeParse({ ...message, format: 'html' }).success).toBe(
+    false,
+  );
+  expect(serverMessage.safeParse({ ...message, format: 'html' }).success).toBe(
+    false,
+  );
 });
 
 test('deduplicates navigation commands and rejects overlapping transitions', () => {

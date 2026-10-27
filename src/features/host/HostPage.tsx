@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { ServerMessage } from '../../../shared/protocol';
 import { Brand } from '../../components/Brand';
 import { commandId } from '../../lib/commandId';
-import type { Deck } from '../deck/readDeck';
+import type { Deck } from '../deck/deckTypes';
+import { MAX_FILE_BYTES } from '../deck/limits';
 import type { openRenderer } from '../deck/renderer';
 import { api, errorText } from '../session/api';
 import { useSession } from '../session/useSession';
+import { NotesPreview } from './NotesPreview';
 import { PairingPanel } from './PairingPanel';
+import { PresentationFiles } from './PresentationFiles';
 
 type Renderer = Awaited<ReturnType<typeof openRenderer>>;
 function restoredSession() {
@@ -19,6 +22,9 @@ function restoredSession() {
 }
 export default function HostPage() {
   const [deck, setDeck] = useState<Deck | null>(null);
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  const deckBuffer = deck?.buffer;
   const [sessionId, setSessionId] = useState<string | null>(restoredSession);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -76,20 +82,27 @@ export default function HostPage() {
         index: message.index,
         revision: message.revision,
         text: deck.slides[message.index]?.notes ?? '',
+        format: deck.format === 'pdf' ? 'markdown' : 'text',
       });
   }
   useEffect(() => {
-    if (!deck || !container.current) return;
+    const selectedDeck = deckRef.current;
+    if (!selectedDeck) return;
+    if (!deckBuffer || selectedDeck.buffer !== deckBuffer) return;
+    if (!container.current) return;
     let disposed = false;
     let instance: Renderer | null = null;
-    const element = container.current;
     setReady(false);
     setRendering(true);
     async function mount() {
       try {
         const { openRenderer: open } = await import('../deck/renderer');
         if (disposed) return;
-        const created = await open(deck as Deck, element, (message) => {
+        const renderDeck = deckRef.current;
+        if (!renderDeck || renderDeck.buffer !== deckBuffer) return;
+        const renderContainer = container.current;
+        if (!renderContainer) return;
+        const created = await open(renderDeck, renderContainer, (message) => {
           if (!disposed) setWarning(message);
         });
         instance = created;
@@ -112,9 +125,15 @@ export default function HostPage() {
       instance?.destroy();
       if (renderer.current === instance) renderer.current = null;
     };
-  }, [deck]);
+  }, [deckBuffer]);
   useEffect(() => {
-    if (session.connected && ready && deck && resume >= 0) {
+    if (
+      session.connected &&
+      ready &&
+      deck &&
+      (deck.format === 'pptx' || deck.notesReady) &&
+      resume >= 0
+    ) {
       latestRevision.current = -1;
       session.send({ type: 'ready', fingerprint: deck.fingerprint });
     }
@@ -186,25 +205,66 @@ export default function HostPage() {
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
   }, [index, deck?.slides.length]);
-  async function selectFile(file?: File) {
-    if (!file) return;
+  async function selectFile(file: File) {
     setError('');
     setWarning('');
     setLoading(true);
     try {
-      if (!file.name.toLowerCase().endsWith('.pptx'))
-        throw new Error('Choose a .pptx PowerPoint file.');
-      if (file.size > 32 * 1024 * 1024)
-        throw new Error('Choose a PPTX smaller than 32 MB.');
-      const { readDeck } = await import('../deck/readDeck');
-      const next = await readDeck(await file.arrayBuffer(), file.name);
+      if (file.size > MAX_FILE_BYTES)
+        throw new Error(
+          `Choose a ${file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'PPTX'} smaller than 32 MB.`,
+        );
+      const buffer = await file.arrayBuffer();
+      const next = file.name.toLowerCase().endsWith('.pdf')
+        ? await (async () => {
+            const { readPdfPresentation } = await import('../deck/readPdfDeck');
+            return readPdfPresentation(buffer, file.name);
+          })()
+        : file.name.toLowerCase().endsWith('.pptx')
+          ? await (async () => {
+              const { readDeck } = await import('../deck/readDeck');
+              return readDeck(buffer, file.name);
+            })()
+          : (() => {
+              throw new Error('Choose a .pptx or .pdf presentation file.');
+            })();
+      if (
+        sessionId &&
+        session.state &&
+        next.format === 'pptx' &&
+        next.fingerprint !== session.state.fingerprint
+      )
+        throw new Error(
+          'Select the original presentation files to resume, or end this session first.',
+        );
+      setDeck(next);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function selectNotesFile(file: File) {
+    if (deck?.format !== 'pdf') return;
+    setError('');
+    setWarning('');
+    setLoading(true);
+    try {
+      if (file.size > MAX_FILE_BYTES)
+        throw new Error('Choose a Markdown file smaller than 32 MB.');
+      const { attachMarkdownNotes } = await import('../deck/pdfDeck');
+      const next = await attachMarkdownNotes(
+        deck,
+        await file.arrayBuffer(),
+        file.name,
+      );
       if (
         sessionId &&
         session.state &&
         next.fingerprint !== session.state.fingerprint
       )
         throw new Error(
-          'Select the original PPTX to resume, or end this session first.',
+          'Select the original presentation PDF and Markdown notes to resume, or end this session first.',
         );
       setDeck(next);
     } catch (err) {
@@ -214,7 +274,7 @@ export default function HostPage() {
     }
   }
   async function createSession() {
-    if (!deck || !ready) return;
+    if (!deck || !ready || (deck.format === 'pdf' && !deck.notesReady)) return;
     setCreating(true);
     setError('');
     try {
@@ -285,12 +345,18 @@ export default function HostPage() {
             {warning}
           </div>
         ) : null}
+        <PresentationFiles
+          deck={deck}
+          loading={loading}
+          selectPresentation={(file) => void selectFile(file)}
+          selectNotes={(file) => void selectNotesFile(file)}
+        />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <section className="min-w-0">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="eyebrow">Audience view</h2>
-              <span className="text-xs text-base-content/45">
-                {deck ? deck.name : 'Local PowerPoint playback'}
+              <span className="text-xs text-base-content">
+                {deck ? deck.name : 'Local presentation playback'}
               </span>
             </div>
             {deck ? (
@@ -361,30 +427,11 @@ export default function HostPage() {
                     ▤
                   </div>
                   <h3 className="text-xl font-semibold tracking-tight">
-                    Your presentation starts here.
+                    Ready when you are.
                   </h3>
-                  <p className="mx-auto mb-6 mt-2 max-w-xs text-sm leading-relaxed text-base-content/55">
-                    Open a PowerPoint file. We’ll render your slides and find
-                    your speaker notes right in this browser.
-                  </p>
-                  <label className="btn btn-primary relative cursor-pointer">
-                    {loading
-                      ? 'Reading presentation…'
-                      : 'Choose a PowerPoint file'}
-                    <input
-                      type="file"
-                      accept=".pptx"
-                      aria-label="Choose a PowerPoint file"
-                      className="absolute inset-0 cursor-pointer opacity-0"
-                      disabled={loading}
-                      onChange={(event) => {
-                        void selectFile(event.target.files?.[0]);
-                        event.target.value = '';
-                      }}
-                    />
-                  </label>
-                  <p className="mt-4 text-xs text-base-content/40">
-                    .pptx only · Up to 32 MB · No upload required
+                  <p className="mx-auto mb-6 mt-2 max-w-xs text-sm leading-relaxed text-base-content">
+                    Choose a presentation file above. Slides and notes are read
+                    in this browser and stay on this device.
                   </p>
                 </div>
               </div>
@@ -392,24 +439,14 @@ export default function HostPage() {
             {deck ? (
               <div className="mt-5 flex items-center gap-4 text-xs text-base-content/55">
                 <span>
-                  {deck.slides.filter((slide) => slide.notes).length} slides
-                  with notes
+                  {deck.format === 'pdf' && !deck.notesReady
+                    ? 'Choose Markdown notes to connect your phone.'
+                    : `${deck.slides.filter((slide) => slide.notes).length} slides with notes`}
                 </span>
-                <label className="cursor-pointer underline">
-                  {sessionId ? 'Reselect original file' : 'Choose another file'}
-                  <input
-                    type="file"
-                    accept=".pptx"
-                    className="sr-only"
-                    aria-label="Choose a PowerPoint file"
-                    disabled={loading || rendering}
-                    onChange={(event) => {
-                      void selectFile(event.target.files?.[0]);
-                      event.target.value = '';
-                    }}
-                  />
-                </label>
               </div>
+            ) : null}
+            {deck?.format === 'pdf' ? (
+              <NotesPreview deck={deck} index={index} />
             ) : null}
             <div className="mt-8 grid gap-5 border-t border-base-300 pt-6 sm:grid-cols-3">
               {[
@@ -501,7 +538,8 @@ export default function HostPage() {
                     ) : null}
                     {!deck ? (
                       <p className="mt-4 text-sm text-warning">
-                        Reselect the original PPTX to resume this session.
+                        Reselect the original presentation and, for PDFs, its
+                        Markdown notes file to resume this session.
                       </p>
                     ) : null}
                     <button
@@ -518,7 +556,11 @@ export default function HostPage() {
                   <button
                     type="button"
                     className="btn"
-                    disabled={!ready || creating}
+                    disabled={
+                      !ready ||
+                      creating ||
+                      (deck?.format === 'pdf' && !deck.notesReady)
+                    }
                     onClick={() => {
                       void createSession();
                     }}
@@ -539,9 +581,9 @@ export default function HostPage() {
                 No app to install. No Bluetooth to pair. Your phone and PC just
                 need an internet connection.
               </p>
-              <p className="mt-3 text-xs leading-relaxed text-base-content/40">
-                Static slides only. Fonts and complex PowerPoint elements may
-                look different. Preview your deck before presenting.
+              <p className="mt-3 text-xs leading-relaxed text-base-content">
+                PDF pages are shown as exported. PPTX fonts and complex elements
+                may look different. Preview before presenting.
               </p>
             </div>
           </aside>

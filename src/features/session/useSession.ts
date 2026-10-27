@@ -6,7 +6,7 @@ import {
   serverMessage,
 } from '../../../shared/protocol';
 
-export type Notes = { index: number; revision: number; text: string };
+export type Notes = Omit<Extract<ServerMessage, { type: 'notes' }>, 'type'>;
 export function useSession(
   id: string | null,
   role: 'host' | 'presenter',

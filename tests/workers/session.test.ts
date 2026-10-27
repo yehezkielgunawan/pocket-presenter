@@ -81,10 +81,88 @@ test('requires host approval before a phone can claim presenter access', async (
   );
   expect(claimed.status).toBe(200);
   expect(claimed.headers.get('Set-Cookie')).toContain('HttpOnly');
+  const presenterCookie =
+    claimed.headers.get('Set-Cookie')?.split(';')[0] ?? '';
+  const hostResponse = await exports.default.fetch(
+    `${origin}/api/sessions/${sessionId}/socket?role=host`,
+    {
+      headers: {
+        Upgrade: 'websocket',
+        Origin: origin,
+        Cookie: hostCookie ?? '',
+      },
+    },
+  );
+  const presenterResponse = await exports.default.fetch(
+    `${origin}/api/sessions/${sessionId}/socket?role=presenter`,
+    {
+      headers: {
+        Upgrade: 'websocket',
+        Origin: origin,
+        Cookie: presenterCookie,
+      },
+    },
+  );
+  const host = hostResponse.webSocket;
+  const presenter = presenterResponse.webSocket;
+  if (!host || !presenter) throw new Error('Missing WebSocket');
+  const hostMessages: ServerMessage[] = [];
+  const phoneMessages: ServerMessage[] = [];
+  host.addEventListener('message', (event) => {
+    hostMessages.push(JSON.parse(String(event.data)));
+  });
+  presenter.addEventListener('message', (event) => {
+    phoneMessages.push(JSON.parse(String(event.data)));
+  });
+  host.accept();
+  presenter.accept();
+  host.send(JSON.stringify({ type: 'ready', fingerprint: 'a'.repeat(64) }));
+  await expect
+    .poll(() => hostMessages.find((message) => message.type === 'renderTarget'))
+    .toBeDefined();
+  const target = hostMessages.find(
+    (message) => message.type === 'renderTarget',
+  );
+  if (target?.type !== 'renderTarget') throw new Error('Missing render target');
+  host.send(
+    JSON.stringify({
+      type: 'renderConfirmed',
+      index: target.index,
+      revision: target.revision,
+    }),
+  );
+  await expect
+    .poll(() => hostMessages.find((message) => message.type === 'requestNotes'))
+    .toBeDefined();
+  const markdownNote = {
+    type: 'notes',
+    index: target.index,
+    revision: target.revision,
+    text: '# Private Markdown\n\n- **Remember**',
+    format: 'markdown',
+  };
+  host.send(
+    JSON.stringify({
+      ...markdownNote,
+      revision: target.revision - 1,
+      text: 'Stale Markdown',
+    }),
+  );
+  host.send(JSON.stringify(markdownNote));
+  await expect
+    .poll(() => phoneMessages.filter((message) => message.type === 'notes'))
+    .toEqual([markdownNote]);
+  const stored = await runInDurableObject(
+    env.SESSIONS.getByName(sessionId),
+    async (_instance, ctx) => ctx.storage.get('session'),
+  );
+  expect(JSON.stringify(stored)).not.toContain('Private Markdown');
   expect(
     (await request(`/api/sessions/${sessionId}`, 'DELETE', {}, hostCookie))
       .status,
   ).toBe(200);
+  host.close();
+  presenter.close();
 });
 test('rejects cross-origin creation and public initialization', async () => {
   const response = await exports.default.fetch(`${origin}/api/sessions`, {
