@@ -5,7 +5,7 @@ Present a PowerPoint or PDF on your computer and control it from your phone, wit
 ## How it works
 
 1. Open the site on your computer and choose a `.pptx` or presentation `.pdf` file.
-2. For a PDF presentation, choose a Markdown notes file (`.md` or `.markdown`). Separate each slide's notes with `---` on its own line.
+2. Optionally choose a Markdown notes file (`.md` or `.markdown`) for either format. Separate each slide's notes with `---` on its own line. You can present without notes; PPTX uses embedded notes when available.
 3. Review the rendered slides and notes preview. The selected files are parsed locally; they are not uploaded.
 4. Select **Connect your phone**.
 5. Scan the QR code or open `/join` on your phone and enter the displayed code.
@@ -14,7 +14,7 @@ Present a PowerPoint or PDF on your computer and control it from your phone, wit
 
 Both devices need internet, but do not need the same Wi-Fi network. A slide number is confirmed only after the computer's browser reports rendering that slide. This does not verify a physical projector's output.
 
-### Markdown notes for PDF presentations
+### Optional Markdown notes for PDF and PPTX presentations
 
 Write UTF-8 Markdown with sections in slide order:
 
@@ -36,9 +36,19 @@ Key context for the second slide.
 Notes for the fourth slide. The third section is intentionally blank.
 ```
 
-Section 1 follows PDF page 1, section 2 follows page 2, and so on. Notes always follow the active slide, including backward navigation and jumps. You do not need the same number of notes sections as PDF pages: missing or empty sections show “No speaker notes for this slide.” Extra sections are accepted and ignored. A trailing separator adds an empty section.
+Section 1 follows slide 1, section 2 follows slide 2, and so on, including hidden PPTX slides. Headings are optional and do not control matching. Notes always follow the active slide, including backward navigation and jumps. Missing or empty sections show “No speaker notes for this slide.” Extra sections are rejected. A trailing separator adds an empty section, so do not add one after the last slide.
+
+Uploaded Markdown replaces all embedded PPTX notes, including blank sections. Select **Remove Markdown notes** to restore embedded PPTX notes or blank PDF notes. Invalid uploads leave the previous notes unchanged. End an existing session before changing its notes.
 
 The PC preview and phone render headings, lists, emphasis, links, and code. A separator inside a fenced code block stays part of the code. Only a line containing exactly `---` (with up to three leading spaces and optional trailing spaces or tabs) splits sections; use `***` for a horizontal rule within a section. The separator convention takes precedence over Markdown front matter and setext heading underlines, so use `#` headings instead.
+
+#### Ask an AI tool to draft notes
+
+Attach your presentation to your AI tool with this prompt, then review its output against your slides and save it as a UTF-8 `.md` file:
+
+> Create speaker notes for the attached presentation as a UTF-8 Markdown file. Write exactly one section per slide, in the original slide order, including hidden slides. Separate sections using `---` on its own line. Do not add a preamble, YAML front matter, or an outer code fence. Use concise speaking bullets and do not invent facts. Keep a section empty if that slide needs no notes.
+
+The same guide and a copyable prompt are available under **How to write presentation notes** next to the file controls. Notes appear in the computer's preview and on the approved remote, not on the audience screen.
 
 ## Local development
 
@@ -151,18 +161,18 @@ Deployment publishes the application; it does not upload presentation files. The
 - Commands are bounded and deduplicated. Stale acknowledgments cannot advance confirmed state.
 - A failed or timed-out render disables remote navigation until the host resumes.
 - Sessions expire after 24 hours. Ending or expiring a session deletes its persisted metadata.
-- After refreshing the computer, reselect the exact original presentation file and, for PDFs, its original Markdown notes file to resume. Files are not saved in browser storage; only the session identifier is kept in sessionStorage.
-- PPTX notes are plain text; PDF notes are Markdown with raw HTML disabled and unsafe link protocols filtered. External slide media is blocked; embedded media remains subject to renderer support.
+- After refreshing the computer, reselect the exact original presentation and its Markdown notes file, if one was used, to resume. This applies to both formats. Files are not saved in browser storage; only the session identifier is kept in sessionStorage.
+- Embedded PPTX notes are plain text; uploaded notes for either format are Markdown with raw HTML disabled and unsafe link protocols filtered. External slide media is blocked; embedded media remains subject to renderer support.
 
 ## Presentation compatibility
 
-PPTX files render with `@aiden0z/pptx-renderer`; PDF files render with PDF.js. PDF speaker notes come from a separate Markdown file, with `---` sections mapped to the same-numbered PDF page. Both presentation renderers and the Markdown renderer run in the browser.
+PPTX files render with `@aiden0z/pptx-renderer`; PDF files render with PDF.js. Both formats work without notes and accept an optional Markdown file, with `---` sections mapped in slide order. PPTX uses embedded notes unless Markdown is selected. Both presentation renderers and the Markdown renderer run in the browser.
 
 PPTX playback supports static slides, not PowerPoint animation or transition playback. Fonts, SmartArt, charts, equations, and advanced effects can differ from PowerPoint. Embedded PDF-based media fallbacks are disabled in this MVP.
 
 Always preview your actual deck before presenting. Automated browser tests use a generated fixture, not a guarantee of fidelity for arbitrary presentations.
 
-Limits: each selected file can be up to 32 MB; presentations support 1–500 slides; PPTX files allow 4,000 archive entries and 2 MB per extracted XML part; notes are limited to 16,000 characters per slide or mapped Markdown section. Extra Markdown sections beyond the presentation's page count are ignored. Hidden PPTX slides are included in presentation order. PPTX notes are associated through XML relationships, not numeric filenames.
+Limits: each selected file can be up to 32 MB; presentations support 1–500 slides; PPTX files allow 4,000 archive entries and 2 MB per extracted XML part; notes are limited to 16,000 characters per slide or mapped Markdown section. Extra Markdown sections beyond the presentation's slide count are rejected. Hidden PPTX slides are included in presentation order. PPTX notes are associated through XML relationships, not numeric filenames.
 
 ## Structure
 
