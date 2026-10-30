@@ -1,13 +1,8 @@
 import { SpeakerNotes } from '../../components/SpeakerNotes';
-import type { PdfDeck } from '../deck/deckTypes';
+import type { Deck } from '../deck/deckTypes';
+import { notesFormat } from '../deck/presentationNotes';
 
-export function NotesPreview({
-  deck,
-  index,
-}: {
-  deck: PdfDeck;
-  index: number;
-}) {
+export function NotesPreview({ deck, index }: { deck: Deck; index: number }) {
   const text = deck.slides[index]?.notes ?? '';
   return (
     <section
@@ -15,11 +10,14 @@ export function NotesPreview({
       className="mt-6 rounded-box border border-base-300 bg-base-100 p-5"
     >
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="notes-preview-heading" className="eyebrow">
+        <h2
+          id="notes-preview-heading"
+          className="text-sm font-semibold text-base-content"
+        >
           Speaker notes preview
         </h2>
         <span className="text-sm text-base-content">
-          Page {index + 1} of {deck.slides.length}
+          Slide {index + 1} of {deck.slides.length}
         </span>
       </div>
       <div
@@ -27,13 +25,7 @@ export function NotesPreview({
         aria-live="polite"
         className="max-h-64 overflow-y-auto break-words text-base leading-relaxed"
       >
-        {deck.notesReady ? (
-          <SpeakerNotes text={text} format="markdown" />
-        ) : (
-          <span className="text-base-content">
-            Choose Markdown notes to preview the active slide's section here.
-          </span>
-        )}
+        <SpeakerNotes text={text} format={notesFormat(deck)} />
       </div>
     </section>
   );

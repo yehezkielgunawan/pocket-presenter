@@ -42,8 +42,7 @@ test('preview follows the active slide and shows missing notes as empty', () => 
     name: 'slides.pdf',
     fingerprint: 'a'.repeat(64),
     buffer: new ArrayBuffer(0),
-    notesReady: true,
-    notesName: 'notes.md',
+    markdownNotes: { name: 'notes.md', originalNotes: ['', ''] },
     slides: [
       { notes: '# First', hidden: false },
       { notes: '', hidden: false },
@@ -57,5 +56,30 @@ test('preview follows the active slide and shows missing notes as empty', () => 
   ).not.toBeInTheDocument();
   expect(
     screen.getByText('No speaker notes for this slide.'),
+  ).toBeInTheDocument();
+});
+
+test('PPTX preview keeps embedded notes literal but renders uploaded Markdown', () => {
+  const deck = {
+    format: 'pptx' as const,
+    name: 'slides.pptx',
+    fingerprint: 'a'.repeat(64),
+    buffer: new ArrayBuffer(0),
+    slides: [{ path: 'slide.xml', notes: '# Embedded text', hidden: false }],
+  };
+  const { rerender } = render(<NotesPreview deck={deck} index={0} />);
+  expect(screen.getByText('# Embedded text')).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Embedded text' })).toBeNull();
+  rerender(
+    <NotesPreview
+      deck={{
+        ...deck,
+        markdownNotes: { name: 'notes.md', originalNotes: ['# Embedded text'] },
+      }}
+      index={0}
+    />,
+  );
+  expect(
+    screen.getByRole('heading', { name: 'Embedded text' }),
   ).toBeInTheDocument();
 });

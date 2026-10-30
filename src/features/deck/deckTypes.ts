@@ -11,6 +11,10 @@ interface DeckMetadata {
   name: string;
   fingerprint: string;
   buffer: ArrayBuffer;
+  markdownNotes?: {
+    name: string;
+    originalNotes: string[];
+  };
 }
 
 export interface PptxDeck extends DeckMetadata {
@@ -21,8 +25,6 @@ export interface PptxDeck extends DeckMetadata {
 export interface PdfDeck extends DeckMetadata {
   format: 'pdf';
   slides: DeckSlide[];
-  notesName: string | null;
-  notesReady: boolean;
 }
 
 export type Deck = PptxDeck | PdfDeck;
