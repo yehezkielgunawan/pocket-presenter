@@ -1,8 +1,6 @@
 import { expect, test } from '@rstest/core';
-import {
-  attachMarkdownNotes,
-  createPdfPresentation,
-} from '../../src/features/deck/pdfDeck';
+import { createPdfPresentation } from '../../src/features/deck/pdfDeck';
+import { attachMarkdownNotes } from '../../src/features/deck/presentationNotes';
 import { MAX_FILE_BYTES } from '../../src/features/deck/readDeck';
 
 function bytes(value: string) {
@@ -16,7 +14,6 @@ test('creates a local PDF presentation with page-aligned empty notes', async () 
   expect(deck).toMatchObject({
     format: 'pdf',
     name: 'slides.pdf',
-    notesReady: false,
     slides: [
       { notes: '', hidden: false },
       { notes: '', hidden: false },
@@ -41,8 +38,7 @@ test('attaches Markdown sections and fingerprints both original files', async ()
 
   expect(deck).toMatchObject({
     format: 'pdf',
-    notesName: 'speaker-notes.md',
-    notesReady: true,
+    markdownNotes: { name: 'speaker-notes.md' },
     slides: [
       { notes: '# Notes for slide one', hidden: false },
       { notes: '', hidden: false },
@@ -63,7 +59,7 @@ test('attaches Markdown sections and fingerprints both original files', async ()
   expect(changed.fingerprint).not.toBe(deck.fingerprint);
 });
 
-test('pads missing sections and ignores extra sections without changing PDF slide count', async () => {
+test('pads missing sections and rejects extra sections without changing PDF slide count', async () => {
   const presentation = await createPdfPresentation(
     bytes('presentation'),
     'slides.pdf',
@@ -75,18 +71,15 @@ test('pads missing sections and ignores extra sections without changing PDF slid
     'notes.md',
   );
   expect(shorter.slides.map((slide) => slide.notes)).toEqual(['First', '', '']);
-  const longer = await attachMarkdownNotes(
-    presentation,
-    bytes('First\n---\n\n---\nThird\n---\nExtra'),
-    'notes.markdown',
-  );
-  expect(longer.slides.map((slide) => slide.notes)).toEqual([
-    'First',
-    '',
-    'Third',
-  ]);
+  await expect(
+    attachMarkdownNotes(
+      presentation,
+      bytes('First\n---\n\n---\nThird\n---\nExtra'),
+      'notes.markdown',
+    ),
+  ).rejects.toThrow(/4 sections.*3 slides/);
   const empty = await attachMarkdownNotes(presentation, bytes(''), 'notes.md');
-  expect(empty.notesReady).toBe(true);
+  expect(empty.markdownNotes?.name).toBe('notes.md');
   expect(empty.slides.map((slide) => slide.notes)).toEqual(['', '', '']);
 });
 
@@ -109,14 +102,14 @@ test('rejects oversized notes files and mapped sections', async () => {
   ).rejects.toThrow(/16,000/);
   await expect(
     attachMarkdownNotes(presentation, bytes('a'.repeat(16000)), 'notes.md'),
-  ).resolves.toMatchObject({ notesReady: true });
+  ).resolves.toMatchObject({ markdownNotes: { name: 'notes.md' } });
   await expect(
     attachMarkdownNotes(
       presentation,
       bytes(`One\n---\nTwo\n---\n${'a'.repeat(16001)}`),
       'notes.md',
     ),
-  ).resolves.toMatchObject({ notesReady: true });
+  ).rejects.toThrow(/3 sections.*2 slides/);
   await expect(
     attachMarkdownNotes(presentation, bytes('%PDF-1.7'), 'notes.pdf'),
   ).rejects.toThrow(/Markdown/);

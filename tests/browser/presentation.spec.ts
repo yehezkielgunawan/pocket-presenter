@@ -28,7 +28,7 @@ test('renders a local deck and synchronizes an approved phone with private notes
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     buffer: deckBuffer,
   });
-  await expect(page.getByLabel('Presentation notes Markdown')).toBeDisabled();
+  await expect(page.getByLabel('Presentation notes Markdown')).toBeEnabled();
   await expect(
     page.getByRole('button', { name: 'Connect your phone' }),
   ).toBeEnabled();

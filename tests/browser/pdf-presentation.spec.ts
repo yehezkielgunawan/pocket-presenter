@@ -46,7 +46,7 @@ test('presents PDF pages with Markdown notes synchronized to the active slide', 
   await expect(page.locator('.stage-renderer canvas')).toHaveCount(1);
   await expect(
     page.getByRole('button', { name: 'Connect your phone' }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await page.getByLabel('Presentation notes Markdown').setInputFiles({
     name: 'wrong-notes.pdf',
     mimeType: 'application/pdf',
@@ -57,7 +57,7 @@ test('presents PDF pages with Markdown notes synchronized to the active slide', 
   );
   await expect(
     page.getByRole('button', { name: 'Connect your phone' }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await page.getByLabel('Presentation notes Markdown').setInputFiles({
     name: 'speaker-notes.md',
     mimeType: 'text/markdown',
@@ -170,7 +170,7 @@ test('presents PDF pages with Markdown notes synchronized to the active slide', 
     buffer: Buffer.from('# Different notes'),
   });
   await expect(page.getByRole('alert')).toContainText(
-    'Select the original presentation PDF and Markdown notes',
+    'Select the original presentation and Markdown notes',
   );
   await page.getByLabel('Presentation notes Markdown').setInputFiles({
     name: 'speaker-notes.md',

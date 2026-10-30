@@ -4,6 +4,7 @@ import { Brand } from '../../components/Brand';
 import { commandId } from '../../lib/commandId';
 import type { Deck } from '../deck/deckTypes';
 import { MAX_FILE_BYTES } from '../deck/limits';
+import { notesFormat } from '../deck/presentationNotes';
 import type { openRenderer } from '../deck/renderer';
 import { api, errorText } from '../session/api';
 import { useSession } from '../session/useSession';
@@ -82,7 +83,7 @@ export default function HostPage() {
         index: message.index,
         revision: message.revision,
         text: deck.slides[message.index]?.notes ?? '',
-        format: deck.format === 'pdf' ? 'markdown' : 'text',
+        format: notesFormat(deck),
       });
   }
   useEffect(() => {
@@ -131,13 +132,20 @@ export default function HostPage() {
       session.connected &&
       ready &&
       deck &&
-      (deck.format === 'pptx' || deck.notesReady) &&
+      deck.fingerprint === session.state?.fingerprint &&
       resume >= 0
     ) {
       latestRevision.current = -1;
       session.send({ type: 'ready', fingerprint: deck.fingerprint });
     }
-  }, [session.connected, session.send, ready, deck, resume]);
+  }, [
+    session.connected,
+    session.send,
+    session.state?.fingerprint,
+    ready,
+    deck,
+    resume,
+  ]);
   const canNavigate =
     ready &&
     !loading &&
@@ -230,8 +238,8 @@ export default function HostPage() {
             })();
       if (
         sessionId &&
-        session.state &&
-        next.format === 'pptx' &&
+        session.state?.hostReady &&
+        deck?.fingerprint === session.state.fingerprint &&
         next.fingerprint !== session.state.fingerprint
       )
         throw new Error(
@@ -245,14 +253,14 @@ export default function HostPage() {
     }
   }
   async function selectNotesFile(file: File) {
-    if (deck?.format !== 'pdf') return;
+    if (!deck) return;
     setError('');
     setWarning('');
     setLoading(true);
     try {
       if (file.size > MAX_FILE_BYTES)
         throw new Error('Choose a Markdown file smaller than 32 MB.');
-      const { attachMarkdownNotes } = await import('../deck/pdfDeck');
+      const { attachMarkdownNotes } = await import('../deck/presentationNotes');
       const next = await attachMarkdownNotes(
         deck,
         await file.arrayBuffer(),
@@ -264,7 +272,7 @@ export default function HostPage() {
         next.fingerprint !== session.state.fingerprint
       )
         throw new Error(
-          'Select the original presentation PDF and Markdown notes to resume, or end this session first.',
+          'Select the original presentation and Markdown notes to resume, or end this session first.',
         );
       setDeck(next);
     } catch (err) {
@@ -273,8 +281,28 @@ export default function HostPage() {
       setLoading(false);
     }
   }
+  async function removeNotes() {
+    if (!deck?.markdownNotes) return;
+    setError('');
+    setLoading(true);
+    try {
+      const { removeMarkdownNotes } = await import('../deck/presentationNotes');
+      const next = await removeMarkdownNotes(deck);
+      if (
+        sessionId &&
+        session.state &&
+        next.fingerprint !== session.state.fingerprint
+      )
+        throw new Error('To change notes, end this session first.');
+      setDeck(next);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setLoading(false);
+    }
+  }
   async function createSession() {
-    if (!deck || !ready || (deck.format === 'pdf' && !deck.notesReady)) return;
+    if (!deck || !ready || loading || creating) return;
     setCreating(true);
     setError('');
     try {
@@ -350,6 +378,7 @@ export default function HostPage() {
           loading={loading}
           selectPresentation={(file) => void selectFile(file)}
           selectNotes={(file) => void selectNotesFile(file)}
+          removeNotes={() => void removeNotes()}
         />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <section className="min-w-0">
@@ -439,15 +468,11 @@ export default function HostPage() {
             {deck ? (
               <div className="mt-5 flex items-center gap-4 text-xs text-base-content/55">
                 <span>
-                  {deck.format === 'pdf' && !deck.notesReady
-                    ? 'Choose Markdown notes to connect your phone.'
-                    : `${deck.slides.filter((slide) => slide.notes).length} slides with notes`}
+                  {`${deck.slides.filter((slide) => slide.notes).length} slides with notes · notes are optional`}
                 </span>
               </div>
             ) : null}
-            {deck?.format === 'pdf' ? (
-              <NotesPreview deck={deck} index={index} />
-            ) : null}
+            {deck ? <NotesPreview deck={deck} index={index} /> : null}
             <div className="mt-8 grid gap-5 border-t border-base-300 pt-6 sm:grid-cols-3">
               {[
                 [
@@ -536,10 +561,13 @@ export default function HostPage() {
                         Resume presentation
                       </button>
                     ) : null}
-                    {!deck ? (
+                    {!deck ||
+                    (session.state &&
+                      deck.fingerprint !== session.state.fingerprint) ? (
                       <p className="mt-4 text-sm text-warning">
-                        Reselect the original presentation and, for PDFs, its
-                        Markdown notes file to resume this session.
+                        Reselect the original presentation and any Markdown
+                        notes used for this session to resume, or end this
+                        session first.
                       </p>
                     ) : null}
                     <button
@@ -556,11 +584,7 @@ export default function HostPage() {
                   <button
                     type="button"
                     className="btn"
-                    disabled={
-                      !ready ||
-                      creating ||
-                      (deck?.format === 'pdf' && !deck.notesReady)
-                    }
+                    disabled={!ready || loading || creating}
                     onClick={() => {
                       void createSession();
                     }}
