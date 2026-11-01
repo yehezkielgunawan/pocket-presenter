@@ -152,6 +152,58 @@ test('requires host approval before a phone can claim presenter access', async (
   await expect
     .poll(() => phoneMessages.filter((message) => message.type === 'notes'))
     .toEqual([markdownNote]);
+  expect(
+    (
+      await request(
+        `/api/sessions/${sessionId}/status?role=presenter`,
+        'GET',
+        undefined,
+        presenterCookie,
+      )
+    ).status,
+  ).toBe(200);
+  const oldClosed = new Promise<number>((resolve) => {
+    presenter.addEventListener('close', (event) => resolve(event.code));
+  });
+  hostMessages.length = 0;
+  const resumedResponse = await exports.default.fetch(
+    `${origin}/api/sessions/${sessionId}/socket?role=presenter`,
+    {
+      headers: {
+        Upgrade: 'websocket',
+        Origin: origin,
+        Cookie: presenterCookie,
+      },
+    },
+  );
+  expect(resumedResponse.status).toBe(101);
+  const resumed = resumedResponse.webSocket;
+  if (!resumed) throw new Error('Missing resumed WebSocket');
+  const resumedMessages: ServerMessage[] = [];
+  resumed.addEventListener('message', (event) => {
+    resumedMessages.push(JSON.parse(String(event.data)));
+  });
+  resumed.accept();
+  await expect(oldClosed).resolves.toBe(4001);
+  await expect
+    .poll(() => resumedMessages.find((message) => message.type === 'snapshot'))
+    .toMatchObject({
+      state: {
+        confirmedSlideIndex: target.index,
+        revision: target.revision,
+        hostReady: true,
+      },
+    });
+  await expect
+    .poll(() => hostMessages.find((message) => message.type === 'requestNotes'))
+    .toMatchObject({
+      index: target.index,
+      revision: target.revision,
+    });
+  host.send(JSON.stringify(markdownNote));
+  await expect
+    .poll(() => resumedMessages.filter((message) => message.type === 'notes'))
+    .toEqual([markdownNote]);
   const stored = await runInDurableObject(
     env.SESSIONS.getByName(sessionId),
     async (_instance, ctx) => ctx.storage.get('session'),
@@ -163,6 +215,7 @@ test('requires host approval before a phone can claim presenter access', async (
   ).toBe(200);
   host.close();
   presenter.close();
+  resumed.close();
 });
 test('rejects cross-origin creation and public initialization', async () => {
   const response = await exports.default.fetch(`${origin}/api/sessions`, {
