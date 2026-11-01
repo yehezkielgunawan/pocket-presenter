@@ -10,6 +10,8 @@ const HostPage = lazy(() => import('./features/host/HostPage'));
 const RemotePage = lazy(() => import('./features/remote/RemotePage'));
 const JoinPage = lazy(() => import('./features/remote/JoinPage'));
 const resumeSession = (id: string) => window.location.replace(`/remote/${id}`);
+const rejoinSession = (id: string) =>
+  window.location.replace(`/join?code=${encodeURIComponent(id)}`);
 const App = () => {
   const path = window.location.pathname;
   const query = new URLSearchParams(window.location.search);
@@ -37,7 +39,11 @@ const App = () => {
       ) : path.startsWith('/remote/') ? (
         <RemotePage sessionId={path.split('/')[2]} />
       ) : path === '/' ? (
-        <SessionRecovery sessionId={candidate} onResume={resumeSession}>
+        <SessionRecovery
+          sessionId={candidate}
+          onResume={resumeSession}
+          onUnavailable={rejoinSession}
+        >
           <HostPage />
         </SessionRecovery>
       ) : (

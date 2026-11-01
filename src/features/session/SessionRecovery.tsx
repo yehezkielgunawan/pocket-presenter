@@ -5,10 +5,12 @@ import { forgetSession, rememberSession } from './rememberedSession';
 export function SessionRecovery({
   sessionId,
   onResume,
+  onUnavailable,
   children,
 }: {
   sessionId: string | null;
   onResume: (id: string) => void;
+  onUnavailable?: (id: string) => void;
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<'checking' | 'failed' | 'setup'>(
@@ -34,7 +36,8 @@ export function SessionRecovery({
           onResume(sessionId);
         } else {
           forgetSession(sessionId);
-          setStatus('setup');
+          if (onUnavailable) onUnavailable(sessionId);
+          else setStatus('setup');
         }
       })
       .catch(() => {
@@ -58,7 +61,7 @@ export function SessionRecovery({
       clearTimeout(retry);
       window.removeEventListener('online', wake);
     };
-  }, [sessionId, onResume, attempt]);
+  }, [sessionId, onResume, onUnavailable, attempt]);
 
   if (status === 'setup') return children;
   return (

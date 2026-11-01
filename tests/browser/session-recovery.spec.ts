@@ -138,9 +138,8 @@ test('lost approval is cleared rather than causing an automatic-return loop', as
     .poll(() => page.evaluate(() => localStorage.getItem('pp.presenter.v1')))
     .toBe(id);
   await context.clearCookies();
-  await page.reload();
-  await page.getByRole('link', { name: 'Pair this phone' }).click();
-  await expect(page.getByLabel('Session code')).toBeVisible();
+  await page.goto('/');
+  await expect(page.getByLabel('Session code')).toHaveValue(id);
   expect(
     await page.evaluate(() => localStorage.getItem('pp.presenter.v1')),
   ).toBeNull();

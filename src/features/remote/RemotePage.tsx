@@ -23,7 +23,11 @@ export default function RemotePage({ sessionId }: { sessionId: string }) {
                 <a href="/join" className="underline">
                   Pair this phone
                 </a>
-              ) : !session.terminal ? (
+              ) : session.terminal ? (
+                <a href="/join" className="underline">
+                  Join another session
+                </a>
+              ) : (
                 <button
                   type="button"
                   className="btn min-h-11"
@@ -31,7 +35,7 @@ export default function RemotePage({ sessionId }: { sessionId: string }) {
                 >
                   Retry connection
                 </button>
-              ) : null}
+              )}
             </span>
           </div>
         ) : null}

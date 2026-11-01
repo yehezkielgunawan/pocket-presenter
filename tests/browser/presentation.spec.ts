@@ -150,7 +150,7 @@ test('renders a local deck and synchronizes an approved phone with private notes
   await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
   await page.getByRole('button', { name: 'End session', exact: true }).click();
   await expect(phone.getByText('Session ended', { exact: true })).toBeVisible();
-  await phone.goto(`${pairingOrigin}/join`);
+  await phone.getByRole('link', { name: 'Join another session' }).click();
   await expect(phone.getByLabel('Session code')).toBeVisible();
   expect(phoneRequests.some((url) => url.endsWith('.pptx'))).toBe(false);
   expect(pageErrors).toEqual([]);
