@@ -1,11 +1,27 @@
 import { lazy, Suspense } from 'react';
 import './App.css';
+import {
+  readRememberedSession,
+  validSessionId,
+} from './features/session/rememberedSession';
+import { SessionRecovery } from './features/session/SessionRecovery';
 
 const HostPage = lazy(() => import('./features/host/HostPage'));
 const RemotePage = lazy(() => import('./features/remote/RemotePage'));
 const JoinPage = lazy(() => import('./features/remote/JoinPage'));
+const resumeSession = (id: string) => window.location.replace(`/remote/${id}`);
 const App = () => {
   const path = window.location.pathname;
+  const query = new URLSearchParams(window.location.search);
+  const explicitCode = query
+    .get('code')
+    ?.toUpperCase()
+    .replace(/[^A-Z2-9]/g, '');
+  const candidate = query.has('code')
+    ? explicitCode && validSessionId(explicitCode)
+      ? explicitCode
+      : null
+    : readRememberedSession();
   return (
     <Suspense
       fallback={
@@ -15,11 +31,15 @@ const App = () => {
       }
     >
       {path === '/join' ? (
-        <JoinPage />
+        <SessionRecovery sessionId={candidate} onResume={resumeSession}>
+          <JoinPage />
+        </SessionRecovery>
       ) : path.startsWith('/remote/') ? (
         <RemotePage sessionId={path.split('/')[2]} />
       ) : path === '/' ? (
-        <HostPage />
+        <SessionRecovery sessionId={candidate} onResume={resumeSession}>
+          <HostPage />
+        </SessionRecovery>
       ) : (
         <main className="p-12">
           <h1>Page not found</h1>

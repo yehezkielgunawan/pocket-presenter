@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Brand } from '../../components/Brand';
 import { api, errorText } from '../session/api';
+import { presenterAccess } from '../session/presenterAccess';
+import { rememberSession } from '../session/rememberedSession';
 
 export default function JoinPage() {
   const [code, setCode] = useState(
@@ -62,6 +64,17 @@ export default function JoinPage() {
               const id = code.toUpperCase().replace(/[^A-Z2-9]/g, '');
               if (!/^[A-HJ-NP-Z2-9]{12}$/.test(id))
                 throw new Error('Enter the 12-character code from your PC.');
+              const access = await presenterAccess(
+                id,
+                AbortSignal.timeout(10000),
+              );
+              if (access === 'approved') {
+                rememberSession(id);
+                window.location.assign(`/remote/${id}`);
+                return;
+              }
+              if (access === 'ended')
+                throw new Error('Session ended or expired.');
               const result = await api<{ requestId: string }>(
                 `/${id}/pairings`,
                 { label: 'Phone remote' },
