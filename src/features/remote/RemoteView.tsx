@@ -13,12 +13,17 @@ export function RemoteView({
   connected: boolean;
   navigate: (target: number) => void;
 }) {
+  const synchronized =
+    !!state &&
+    notes?.index === state.confirmedSlideIndex &&
+    notes.revision === state.revision;
   const usable =
     connected &&
     state?.hostConnected &&
     state.hostReady &&
     state.status === 'active' &&
-    !state.pending;
+    !state.pending &&
+    synchronized;
   const matchingNotes =
     usable &&
     notes?.index === state.confirmedSlideIndex &&
@@ -28,13 +33,17 @@ export function RemoteView({
       ? 'Session ended'
       : !connected
         ? 'Connecting…'
-        : !state?.hostConnected
-          ? 'Waiting for PC'
-          : state.pending
-            ? 'Changing slide…'
-            : !state.hostReady
-              ? 'Waiting for PC to resume'
-              : 'Connected';
+        : !state
+          ? 'Syncing slide and notes…'
+          : !state.hostConnected
+            ? 'Waiting for PC'
+            : state.pending
+              ? 'Changing slide…'
+              : !state.hostReady
+                ? 'Waiting for PC to resume'
+                : !synchronized
+                  ? 'Syncing slide and notes…'
+                  : 'Connected';
   return (
     <>
       <section className="flex items-start justify-between gap-4 border-b border-base-300 pb-7">

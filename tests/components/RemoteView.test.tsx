@@ -63,3 +63,36 @@ test('renders Markdown only for confirmed notes marked as Markdown', () => {
   ).not.toBeInTheDocument();
   expect(screen.getByText('# Plain PPTX note')).toBeInTheDocument();
 });
+
+test('waits for matching notes before allowing navigation, including empty notes', () => {
+  const state = {
+    ...createState('TEST', 'a'.repeat(64), 3, 1),
+    hostConnected: true,
+    presenterConnected: true,
+  };
+  const { rerender } = render(
+    <RemoteView state={state} notes={null} connected navigate={() => {}} />,
+  );
+  expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Syncing slide and notes',
+  );
+  rerender(
+    <RemoteView
+      state={state}
+      notes={{ index: 0, revision: 0, text: 'Wrong slide' }}
+      connected
+      navigate={() => {}}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
+  rerender(
+    <RemoteView
+      state={state}
+      notes={{ index: 1, revision: 0, text: '' }}
+      connected
+      navigate={() => {}}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
+});

@@ -62,7 +62,7 @@ test('renders a local deck and synchronizes an approved phone with private notes
     isMobile: true,
     hasTouch: true,
   });
-  const phone = await phoneContext.newPage();
+  let phone = await phoneContext.newPage();
   const phoneRequests: string[] = [];
   phone.on('request', (request) => phoneRequests.push(request.url()));
   await expect(
@@ -101,6 +101,44 @@ test('renders a local deck and synchronizes an approved phone with private notes
   await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
   await phone.reload();
   await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
+  await phone.close();
+  phone = await phoneContext.newPage();
+  phone.on('pageerror', (error) => pageErrors.push(error.message));
+  phone.on('request', (request) => phoneRequests.push(request.url()));
+  await phone.goto(pairingOrigin);
+  await expect(phone).toHaveURL(`${pairingOrigin}/remote/${code}`);
+  await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve phone' })).toHaveCount(
+    0,
+  );
+  await phone.goto(`${pairingOrigin}/join?code=${code}`);
+  await expect(phone).toHaveURL(`${pairingOrigin}/remote/${code}`);
+  await expect(phone.getByRole('button', { name: 'Next' })).toBeEnabled();
+  await phoneContext.setOffline(true);
+  await expect(phone.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await phoneContext.setOffline(false);
+  await expect(phone.getByRole('button', { name: 'Next' })).toBeEnabled();
+  const replacement = await phoneContext.newPage();
+  await replacement.goto(`${pairingOrigin}/remote/${code}`);
+  await expect(replacement.getByRole('button', { name: 'Next' })).toBeEnabled();
+  await expect(phone.getByText('Connected in another tab')).toBeVisible();
+  await phone.evaluate(() => {
+    window.dispatchEvent(new Event('online'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pageshow'));
+  });
+  await expect(phone.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await replacement.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByLabel('Audience presentation')).toContainText(
+    'Second slide',
+  );
+  await replacement.close();
+  await phone.reload();
+  await expect(
+    phone.getByText('No speaker notes for this slide.'),
+  ).toBeVisible();
+  await phone.getByRole('button', { name: 'Previous' }).click();
+  await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
   await page.reload();
   await expect(phone.getByRole('button', { name: 'Next' })).toBeDisabled();
   await page.getByLabel('Presentation file').setInputFiles({
@@ -112,6 +150,8 @@ test('renders a local deck and synchronizes an approved phone with private notes
   await expect(phone.getByText('First paragraph.\nSecond line.')).toBeVisible();
   await page.getByRole('button', { name: 'End session', exact: true }).click();
   await expect(phone.getByText('Session ended', { exact: true })).toBeVisible();
+  await phone.getByRole('link', { name: 'Join another session' }).click();
+  await expect(phone.getByLabel('Session code')).toBeVisible();
   expect(phoneRequests.some((url) => url.endsWith('.pptx'))).toBe(false);
   expect(pageErrors).toEqual([]);
   await phoneContext.close();
