@@ -1,6 +1,7 @@
 import type { RenderTask } from 'pdfjs-dist';
 import type { PdfDeck } from './deckTypes';
 import { openPdfDocument } from './pdfDocument';
+import { calculateSlideSizing, type SlideSizingMode } from './slideSizing';
 
 export async function openPdfRenderer(
   deck: PdfDeck,
@@ -17,6 +18,7 @@ export async function openPdfRenderer(
   let renderTask: RenderTask | null = null;
   let renderQueue = Promise.resolve();
   let currentIndex = 0;
+  let sizingMode: SlideSizingMode = 'fit';
   let resizeObserver: ResizeObserver | null = null;
   container.classList.add('pdf-stage');
 
@@ -26,13 +28,25 @@ export async function openPdfRenderer(
       throw new Error('The requested PDF page does not exist.');
 
     const page = await loaded.document.getPage(index + 1);
+    if (disposed) return;
     const baseViewport = page.getViewport({ scale: 1 });
     const bounds = container.getBoundingClientRect();
-    const fitScale = Math.min(
-      bounds.width / baseViewport.width,
-      bounds.height / baseViewport.height,
+    const size = calculateSlideSizing(
+      baseViewport.width,
+      baseViewport.height,
+      bounds.width,
+      bounds.height,
+      sizingMode,
     );
-    const scale = Math.max(0.1, Math.min(fitScale || 1, 2));
+    if (!size) {
+      currentIndex = index;
+      return;
+    }
+    const displayScale = Math.max(
+      size.width / baseViewport.width,
+      size.height / baseViewport.height,
+    );
+    const scale = Math.min(displayScale, 2);
     const viewport = page.getViewport({ scale });
     const outputScale = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
@@ -40,8 +54,8 @@ export async function openPdfRenderer(
     if (!context) throw new Error('The browser could not create a PDF canvas.');
     canvas.width = Math.ceil(viewport.width * outputScale);
     canvas.height = Math.ceil(viewport.height * outputScale);
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
+    canvas.style.width = `${size.width}px`;
+    canvas.style.height = `${size.height}px`;
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', `Presentation page ${index + 1}`);
 
@@ -71,17 +85,26 @@ export async function openPdfRenderer(
     return operation;
   }
 
+  function refresh() {
+    const operation = renderQueue.then(() => {
+      if (!disposed) return drawSlide(currentIndex);
+    });
+    renderQueue = operation.catch(() => undefined);
+    return operation;
+  }
+
   try {
     await showSlide(0);
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        void showSlide(currentIndex).catch((error: unknown) =>
-          onWarning(
-            error instanceof Error
-              ? error.message
-              : 'The PDF page could not be resized.',
-          ),
-        );
+        void refresh().catch((error: unknown) => {
+          if (!disposed)
+            onWarning(
+              error instanceof Error
+                ? error.message
+                : 'The PDF page could not be resized.',
+            );
+        });
       });
       resizeObserver.observe(container);
     }
@@ -95,6 +118,10 @@ export async function openPdfRenderer(
 
   return {
     showSlide,
+    setSizingMode(mode: SlideSizingMode) {
+      sizingMode = mode;
+      return refresh();
+    },
     destroy() {
       disposed = true;
       resizeObserver?.disconnect();

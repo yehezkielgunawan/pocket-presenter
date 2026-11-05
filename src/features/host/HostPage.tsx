@@ -6,11 +6,16 @@ import type { Deck } from '../deck/deckTypes';
 import { MAX_FILE_BYTES } from '../deck/limits';
 import { notesFormat } from '../deck/presentationNotes';
 import type { openRenderer } from '../deck/renderer';
+import type { SlideSizingMode } from '../deck/slideSizing';
 import { api, errorText } from '../session/api';
 import { useSession } from '../session/useSession';
 import { NotesPreview } from './NotesPreview';
 import { PairingPanel } from './PairingPanel';
 import { PresentationFiles } from './PresentationFiles';
+import {
+  readSlideSizingPreference,
+  saveSlideSizingPreference,
+} from './slideSizingPreference';
 
 type Renderer = Awaited<ReturnType<typeof openRenderer>>;
 function restoredSession() {
@@ -28,6 +33,9 @@ export default function HostPage() {
   const deckBuffer = deck?.buffer;
   const [sessionId, setSessionId] = useState<string | null>(restoredSession);
   const [index, setIndex] = useState(0);
+  const [sizingMode, setSizingMode] = useState(readSlideSizingPreference);
+  const sizingModeRef = useRef(sizingMode);
+  sizingModeRef.current = sizingMode;
   const [loading, setLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [ready, setReady] = useState(false);
@@ -106,16 +114,22 @@ export default function HostPage() {
         const created = await open(renderDeck, renderContainer, (message) => {
           if (!disposed) setWarning(message);
         });
-        instance = created;
         if (disposed) {
           created.destroy();
           return;
         }
+        instance = created;
+        await created.setSizingMode(sizingModeRef.current);
+        if (disposed) return;
         renderer.current = created;
         setReady(true);
         setIndex(0);
       } catch (err) {
-        if (!disposed) setError(errorText(err));
+        if (!disposed) {
+          instance?.destroy();
+          instance = null;
+          setError(errorText(err));
+        }
       } finally {
         if (!disposed) setRendering(false);
       }
@@ -191,7 +205,7 @@ export default function HostPage() {
       }
       if (
         (event.target as HTMLElement)?.closest(
-          'input, textarea, button, [contenteditable="true"]',
+          'input, textarea, select, button, [contenteditable="true"]',
         )
       )
         return;
@@ -426,18 +440,44 @@ export default function HostPage() {
                       →
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={!ready}
-                    onClick={() => {
-                      void stage.current
-                        ?.requestFullscreen()
-                        .catch((err) => setError(errorText(err)));
-                    }}
-                  >
-                    Fullscreen ↗
-                  </button>
+                  <div className="flex min-w-0 flex-wrap items-end gap-3">
+                    <label className="flex min-w-0 flex-col gap-1 text-sm text-base-content">
+                      Slide sizing
+                      <select
+                        className="select min-h-11 w-full max-w-56"
+                        value={sizingMode}
+                        disabled={!ready}
+                        onChange={(event) => {
+                          const mode = event.target.value as SlideSizingMode;
+                          setSizingMode(mode);
+                          saveSlideSizingPreference(mode);
+                          const activeRenderer = renderer.current;
+                          void activeRenderer
+                            ?.setSizingMode(mode)
+                            .catch((err) => {
+                              if (renderer.current === activeRenderer)
+                                setError(errorText(err));
+                            });
+                        }}
+                      >
+                        <option value="fit">Fit</option>
+                        <option value="fill">Fill (crop edges)</option>
+                        <option value="stretch">Stretch (may distort)</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn min-h-11"
+                      disabled={!ready}
+                      onClick={() => {
+                        void stage.current
+                          ?.requestFullscreen()
+                          .catch((err) => setError(errorText(err)));
+                      }}
+                    >
+                      Fullscreen ↗
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-3 text-xs text-base-content/45">
                   {rendering
