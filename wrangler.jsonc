@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "routes": [
+    { "pattern": "pocket-presenter.yehezgun.com", "custom_domain": true },
     { "pattern": "remote-presenter.yehezgun.com", "custom_domain": true }
   ],
   "vars": { "LOCAL_LAN_HOST": "" },

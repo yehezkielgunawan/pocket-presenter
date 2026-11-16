@@ -115,7 +115,9 @@ Browser tests remain available locally through `pnpm run test:browser`; they are
 
 ## Deploy to Cloudflare Workers
 
-Production URL: **https://remote-presenter.yehezgun.com**.
+Canonical production URL: **https://pocket-presenter.yehezgun.com**.
+
+The domain migration requires a deployment and a Cloudflare redirect rule. Until those steps are complete, the existing production hostname remains `remote-presenter.yehezgun.com`. See [Domain migration](#domain-migration).
 
 ### Manual GitHub deployment
 
@@ -130,7 +132,7 @@ Add these [repository Actions secrets](https://github.com/yehezkielgunawan/pocke
 
 Then open **Actions → Deploy to Cloudflare → Run workflow**, select **main**, and run it. The workflow records the deployment in the GitHub `production` environment.
 
-`wrangler.jsonc` declares `remote-presenter.yehezgun.com` as a Worker Custom Domain. The `yehezgun.com` zone must already be active in the deploying Cloudflare account. Cloudflare provisions the hostname's DNS and TLS on deployment; no origin server is needed. An existing conflicting CNAME for that hostname must be removed before the first deployment. Staging explicitly has no production custom-domain route.
+`wrangler.jsonc` declares both `pocket-presenter.yehezgun.com` and `remote-presenter.yehezgun.com` as Worker Custom Domains. The `yehezgun.com` zone must already be active in the deploying Cloudflare account. Cloudflare provisions DNS and TLS for these hostnames on deployment; no origin server is needed. Check for conflicting DNS records before deploying, and resolve them only after confirming they do not serve another application. Staging explicitly has no production custom-domain route.
 
 ### Local CLI deployment
 
@@ -150,6 +152,30 @@ pnpm run deploy:staging
 `wrangler.jsonc` contains the static asset configuration, SPA fallback, API routing, Durable Object binding, SQLite migration, and staging binding. No R2, D1, external conversion API, container, or application secret is required. Cloudflare account limits and Durable Object usage still apply.
 
 Deployment publishes the application; it does not upload presentation files. The deployment commands are explicit and are not run automatically by tests.
+
+### Domain migration
+
+Keep both Custom Domains attached to the existing `pocket-presenter` Worker. Do not rename the production or staging Worker, change the Durable Object binding, or reset its migration history.
+
+1. Confirm access to the `yehezgun.com` zone, Worker deployment, and Redirect Rules. Check that the new hostname has no conflicting service. Record the current deployment version, domain bindings, and any existing redirect rules for rollback.
+2. Choose a quiet deployment window. Cookies and browser storage do not move between hostnames, and redirects do not migrate live WebSocket connections. Users must reopen their presentation on the new domain, create a new session, and pair their phone again.
+3. Run the commands in [Checks](#checks), including `pnpm run deploy:dry`. After deployment approval, deploy with both Custom Domains configured.
+4. Verify DNS and HTTPS on the new domain. Test presentation loading, session creation, phone pairing, slide control, and reconnection. Confirm that generated pairing links use `pocket-presenter.yehezgun.com`.
+5. In the Cloudflare dashboard for `yehezgun.com`, create a [Single Redirect](https://developers.cloudflare.com/rules/url-forwarding/single-redirects/create-dashboard/) with the settings below. Keep the old hostname's DNS proxied and its TLS certificate valid. This rule runs before application and static-asset handling; Wrangler deployment does not create it.
+
+   | Setting | Value |
+   | --- | --- |
+   | Match expression | `http.host eq "remote-presenter.yehezgun.com"` |
+   | Target type | Dynamic |
+   | Target expression | `concat("https://pocket-presenter.yehezgun.com", http.request.uri.path)` |
+   | Preserve query string | Enabled |
+   | Initial status code | `302` (temporary) |
+   | Final status code | `301` (permanent, after verification) |
+
+6. Check that the old hostname redirects `/`, `/join`, and a nested path with a query string to the same path and query on the new hostname. Confirm that the new hostname does not redirect back. Open an old pairing link and complete fresh pairing with a host on the new domain.
+7. After smoke tests pass, change the rule to `301`. Retain the redirect and both Custom Domains so old bookmarks and shared links continue to work.
+
+For rollback during temporary-redirect testing, disable the redirect rule to restore old-domain access. If the application deployment must also be reverted, restore the recorded Worker version and verify the old domain's DNS, TLS, and pairing flow. Keep both domain bindings while investigating. Permanent redirects may remain cached in browsers, so only promote to `301` after verification.
 
 ## Privacy and session behavior
 
