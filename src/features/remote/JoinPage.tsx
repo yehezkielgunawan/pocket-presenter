@@ -26,7 +26,10 @@ export default function JoinPage() {
         );
         if (disposed) return;
         if (result.pending) timer = setTimeout(claim, 1500);
-        else window.location.assign(`/remote/${pairing?.sessionId}`);
+        else if (pairing) {
+          rememberSession(pairing.sessionId);
+          window.location.assign(`/remote/${pairing.sessionId}`);
+        }
       } catch (err) {
         if (!disposed) {
           setError(errorText(err));

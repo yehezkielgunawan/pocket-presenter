@@ -36,7 +36,7 @@ export function SessionRecovery({
           onResume(sessionId);
         } else {
           forgetSession(sessionId);
-          if (onUnavailable) onUnavailable(sessionId);
+          if (access === 'pair' && onUnavailable) onUnavailable(sessionId);
           else setStatus('setup');
         }
       })
