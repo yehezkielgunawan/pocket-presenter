@@ -33,6 +33,71 @@ async function createSession(page: Page, approve = true) {
   return sessionId;
 }
 
+test('new pairing is remembered before opening the remote and resumes in a new tab', async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const id = await createSession(page, false);
+  const observer = await context.newPage();
+  await observer.goto('/join');
+  await page.goto('/join');
+  await page.route(`**/remote/${id}`, (route) => route.abort());
+  await page.getByLabel('Session code').fill(id);
+  const pairingResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().endsWith(`/${id}/pairings`),
+  );
+  await page.getByRole('button', { name: /Connect to presentation/ }).click();
+  const { requestId } = (await (await pairingResponse).json()) as {
+    requestId: string;
+  };
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error('Recovery tests require a base URL');
+  const approval = await page.request.post(
+    `/api/sessions/${id}/pairings/${requestId}/approve`,
+    { headers: { Origin: new URL(baseURL).origin }, data: {} },
+  );
+  expect(approval.status()).toBe(200);
+  await expect
+    .poll(() =>
+      observer.evaluate(() => localStorage.getItem('pp.presenter.v1')),
+    )
+    .toBe(id);
+  await page.close();
+  await observer.goto('/');
+  await expect(observer).toHaveURL(`/remote/${id}`);
+});
+
+test('an ended remembered session returns to the homepage', async ({
+  page,
+  context,
+}) => {
+  const id = await createSession(page);
+  await page.goto(`/remote/${id}`);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('pp.presenter.v1')))
+    .toBe(id);
+  await page.close();
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error('Recovery tests require a base URL');
+  const ended = await context.request.delete(`/api/sessions/${id}`, {
+    headers: { Origin: new URL(baseURL).origin },
+    data: {},
+  });
+  expect(ended.ok()).toBe(true);
+  const reopened = await context.newPage();
+  await reopened.goto('/');
+  await expect(reopened.getByLabel('Session code')).not.toBeVisible();
+  await expect(reopened).toHaveURL('/');
+  await expect
+    .poll(() =>
+      reopened.evaluate(() => localStorage.getItem('pp.presenter.v1')),
+    )
+    .toBeNull();
+});
+
 test('an explicit different code takes priority, and manual entry reuses approval', async ({
   page,
 }) => {
